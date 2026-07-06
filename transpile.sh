@@ -15,10 +15,13 @@
 #                                           defs/_template.*.toml for the full list)
 #
 # Supported TOML subset: "basic" and 'literal' strings, numbers, booleans,
-# single-line arrays, ''' / """ multi-line strings whose closing delimiter sits on
-# its own line, [section] headers, full-line # comments. NOT supported: inline
-# tables, dotted keys, trailing comments after values, nested arrays — put anything
-# fancier in a raw block.
+# single-line arrays, ''' / """ multi-line strings (inline '''x''' works; for
+# multi-line values text may follow the opening delimiter and the closing delimiter
+# starts its own line), [section] headers, # comments (full-line or trailing).
+# NOT supported: inline tables, dotted keys, nested arrays — put anything fancier
+# in a raw block. Multi-line values are dedented by the whitespace prefix common
+# to all non-empty lines, so uncommented indented template blocks emit flush-left.
+# Anything unparseable is a hard error — the build never emits a mangled value.
 #
 # Special fields inside a harness table:
 #   raw = '''...'''      verbatim lines injected into the generated file's metadata —
@@ -67,37 +70,143 @@ trim() {
 
 # --- def parsing ---------------------------------------------------------------
 # Values land in FM: top-level keys as "key", section keys as "section.key".
-# Arrays are stored comma-joined ("a, b"); list-shaped output fields re-split them.
+# Arrays are stored SEP-joined so elements may contain commas; list-shaped output
+# fields re-split them (falling back to commas for plain-string values).
+
+SEP=$'\x1f'
 
 declare -A FM
 BODY=
 CUR_DEF=
+CUR_LINENO=0
 
-parse_scalar() {
-  local val=$1
-  if [[ ${#val} -ge 2 && $val == \"*\" ]]; then
-    val=${val:1:${#val}-2}
-    val=${val//\\\"/\"}
-    val=${val//\\\\/\\}
-  elif [[ ${#val} -ge 2 && $val == \'*\' ]]; then
-    val=${val:1:${#val}-2}
+perr() { die "$CUR_DEF:$CUR_LINENO: $*"; }
+
+# After a parsed value, only whitespace or a # comment may remain on the line.
+check_tail() {
+  local rest
+  rest=$(trim "$1")
+  if [[ -n $rest && $rest != \#* ]]; then
+    perr "unexpected content after value: $rest"
   fi
-  printf '%s' "$val"
 }
 
-parse_array() {
-  local inner=$1 out= el
-  inner=${inner:1:${#inner}-2}
-  IFS=',' read -ra el <<<"$inner"
-  local e
-  for e in "${el[@]}"; do
-    e=$(trim "$e")
-    if [[ -z $e ]]; then continue; fi
-    e=$(parse_scalar "$e")
-    if [[ -n $out ]]; then out+=", "; fi
-    out+=$e
+# Strip the shortest leading whitespace found on any non-empty line from all lines,
+# so an indented block (e.g. an uncommented template raw = '''...''') emits flush-left.
+dedent() {
+  printf '%s' "$1" | awk '
+    { lines[NR] = $0 }
+    /[^ \t]/ { match($0, /^[ \t]*/); if (!seen || RLENGTH < min) { min = RLENGTH; seen = 1 } }
+    END { if (!seen) min = 0; for (i = 1; i <= NR; i++) print substr(lines[i], min + 1) }'
+}
+
+# scan_literal_string / scan_basic_string: parse a quoted token at the start of $1.
+# Set SCAN_VAL to the contents and SCAN_TAIL to everything after the closing quote.
+SCAN_VAL= SCAN_TAIL=
+scan_literal_string() {
+  local rest=${1:1}
+  if [[ $rest != *\'* ]]; then perr "unterminated string: $1"; fi
+  SCAN_VAL=${rest%%\'*}
+  SCAN_TAIL=${rest#*\'}
+}
+
+scan_basic_string() {
+  local s=$1 i=1 c nx out= n
+  n=${#s}
+  while (( i < n )); do
+    c=${s:i:1}
+    if [[ $c == \\ ]]; then
+      nx=${s:i+1:1}
+      case $nx in
+        '"') out+='"' ;;
+        \\)  out+='\' ;;
+        n)   out+=$'\n' ;;
+        t)   out+=$'\t' ;;
+        *)   out+="\\$nx" ;;
+      esac
+      i=$((i + 2))
+      continue
+    fi
+    if [[ $c == '"' ]]; then
+      SCAN_VAL=$out
+      SCAN_TAIL=${s:i+1}
+      return 0
+    fi
+    out+=$c
+    i=$((i + 1))
   done
-  printf '%s' "$out"
+  perr "unterminated string: $s"
+}
+
+# parse_array: a [...] token at the start of $1. Quoted elements may contain
+# commas, # and ]. Sets SCAN_VAL to the comma-joined parsed elements and
+# SCAN_TAIL to everything after the closing bracket.
+parse_array() {
+  local s=${1:1} out= closed=0 e
+  while :; do
+    s=${s#"${s%%[![:space:]]*}"}
+    if [[ -z $s ]]; then break; fi
+    case $s in
+      ']'*) closed=1; SCAN_TAIL=${s:1}; break ;;
+      ','*) s=${s:1}; continue ;;
+      \'*)  scan_literal_string "$s"; s=$SCAN_TAIL ;;
+      \"*)  scan_basic_string "$s"; s=$SCAN_TAIL ;;
+      *)
+        e=${s%%[],]*}
+        if [[ $e == "$s" ]]; then break; fi
+        s=${s:${#e}}
+        e=$(trim "$e")
+        if [[ ! ( $e =~ ^-?[0-9]+(\.[0-9]+)?$ || $e == true || $e == false ) ]]; then
+          perr "bad array element '$e' (strings must be quoted)"
+        fi
+        SCAN_VAL=$e ;;
+    esac
+    if [[ -n $out ]]; then out+=$SEP; fi
+    out+=$SCAN_VAL
+  done
+  if (( ! closed )); then perr "unterminated array: $1"; fi
+  SCAN_VAL=$out
+}
+
+# parse_value <rhs>: sets PV_VAL, or PV_ML=1 with PV_DELIM/PV_SEED when the value
+# opens a multi-line string that continues on following lines.
+PV_VAL= PV_ML=0 PV_DELIM= PV_SEED=
+parse_value() {
+  local val=$1 delim rest
+  PV_VAL= PV_ML=0 PV_DELIM= PV_SEED=
+  case $val in
+    "'''"*|'"""'*)
+      delim=${val:0:3}
+      rest=${val:3}
+      if [[ $rest == *"$delim"* ]]; then
+        PV_VAL=${rest%%"$delim"*}
+        check_tail "${rest#*"$delim"}"
+      else
+        PV_ML=1 PV_DELIM=$delim PV_SEED=$rest
+      fi ;;
+    \'*)
+      scan_literal_string "$val"
+      PV_VAL=$SCAN_VAL
+      check_tail "$SCAN_TAIL" ;;
+    \"*)
+      scan_basic_string "$val"
+      PV_VAL=$SCAN_VAL
+      check_tail "$SCAN_TAIL" ;;
+    \[*)
+      parse_array "$val"
+      PV_VAL=$SCAN_VAL
+      check_tail "$SCAN_TAIL" ;;
+    *)
+      rest=${val%%#*}
+      rest=$(trim "$rest")
+      if [[ -z $rest ]]; then
+        perr "missing value"
+      fi
+      if [[ ! ( $rest =~ ^-?[0-9]+(\.[0-9]+)?$ || $rest == true || $rest == false ) ]]; then
+        perr "unquoted value '$rest' (strings must be quoted)"
+      fi
+      PV_VAL=$rest ;;
+  esac
 }
 
 parse_def() {
@@ -106,10 +215,14 @@ parse_def() {
   FM=()
   BODY=
   CUR_DEF=${file#"$ROOT"/}
+  CUR_LINENO=0
   while IFS= read -r line || [[ -n $line ]]; do
+    CUR_LINENO=$((CUR_LINENO + 1))
     if [[ -n $ml_key ]]; then
-      if [[ $(trim "$line") == "$ml_delim" ]]; then
-        FM[$ml_key]=$ml_val
+      tline=$(trim "$line")
+      if [[ $tline == "$ml_delim"* ]]; then
+        check_tail "${tline#"$ml_delim"}"
+        FM[$ml_key]=$(dedent "$ml_val")
         ml_key=
         ml_val=
         ml_delim=
@@ -124,28 +237,27 @@ parse_def() {
       section=$(trim "${tline:1:${#tline}-2}")
       case $section in
         claude|gemini|opencode|codex) ;;
-        *) die "$CUR_DEF: unknown section [$section] (expected claude, gemini, opencode, or codex)" ;;
+        *) perr "unknown section [$section] (expected claude, gemini, opencode, or codex)" ;;
       esac
       continue
     fi
     if [[ $tline != *=* ]]; then
-      die "$CUR_DEF: bad line (expected 'key = value' or '[section]'): $tline"
+      perr "bad line (expected 'key = value' or '[section]'): $tline"
     fi
     key=$(trim "${tline%%=*}")
     val=$(trim "${tline#*=}")
+    if [[ -z $key ]]; then perr "missing key: $tline"; fi
     fullkey=$key
     if [[ -n $section ]]; then fullkey="$section.$key"; fi
-    if [[ $val == "'''" || $val == '"""' ]]; then
+    parse_value "$val"
+    if (( PV_ML )); then
       ml_key=$fullkey
-      ml_delim=$val
-      ml_val=
+      ml_delim=$PV_DELIM
+      ml_val=$PV_SEED
+      if [[ -n $ml_val ]]; then ml_val+=$'\n'; fi
       continue
     fi
-    if [[ $val == \[*\] ]]; then
-      FM[$fullkey]=$(parse_array "$val")
-    else
-      FM[$fullkey]=$(parse_scalar "$val")
-    fi
+    FM[$fullkey]=$PV_VAL
   done <"$file"
   if [[ -n $ml_key ]]; then
     die "$CUR_DEF: unterminated multi-line string for '$ml_key'"
@@ -171,6 +283,7 @@ targets_of() {
   local raw t out=
   raw=${FM[targets]:-$ALL_HARNESSES}
   raw=${raw//,/ }
+  raw=${raw//$SEP/ }
   for t in $raw; do
     case $t in
       claude|gemini|opencode|codex) out+="$t " ;;
@@ -252,28 +365,48 @@ toml_body() {
   printf "'''\n%s'''" "$body"
 }
 
+# yaml_scalar <value> — typed YAML scalar: bare numbers/booleans, quoted otherwise.
+yaml_scalar() {
+  if [[ $1 =~ ^-?[0-9]+(\.[0-9]+)?$ || $1 == true || $1 == false ]]; then
+    printf '%s' "$1"
+  else
+    yq_ "$1"
+  fi
+}
+
+# split_list <value> — one element per line; splits arrays on SEP, plain strings on commas.
+split_list() {
+  local val=$1 el e
+  if [[ $val == *"$SEP"* ]]; then
+    IFS=$SEP read -ra el <<<"$val"
+  else
+    IFS=',' read -ra el <<<"$val"
+  fi
+  for e in "${el[@]}"; do printf '%s\n' "$(trim "$e")"; done
+}
+
 # emit_kv <file> <yaml-key> <value> — appends the pair if value is non-empty.
 emit_kv() {
   local file=$1 key=$2 val=$3
   if [[ -z $val ]]; then return 0; fi
+  val=${val//$SEP/, }  # array used where the harness expects a scalar: comma-join
   while [[ $val == *$'\n' ]]; do val=${val%$'\n'}; done
   if [[ $val == *$'\n'* ]]; then
     printf '%s: |-\n' "$key" >>"$file"
     printf '%s\n' "$val" | sed 's/^/  /' >>"$file"
-  elif [[ $val =~ ^-?[0-9]+(\.[0-9]+)?$ || $val == true || $val == false ]]; then
-    printf '%s: %s\n' "$key" "$val" >>"$file"
   else
-    printf '%s: %s\n' "$key" "$(yq_ "$val")" >>"$file"
+    printf '%s: %s\n' "$key" "$(yaml_scalar "$val")" >>"$file"
   fi
 }
 
-# emit_yaml_list <file> <key> <comma-joined values>
+# emit_yaml_list <file> <key> <SEP- or comma-joined values>
 emit_yaml_list() {
-  local file=$1 key=$2 val=$3 el e
+  local file=$1 key=$2 val=$3 e
   if [[ -z $val ]]; then return 0; fi
   printf '%s:\n' "$key" >>"$file"
-  IFS=',' read -ra el <<<"$val"
-  for e in "${el[@]}"; do printf -- '  - %s\n' "$(trim "$e")" >>"$file"; done
+  while IFS= read -r e; do
+    printf -- '  - %s\n' "$(yaml_scalar "$e")" >>"$file"
+  done < <(split_list "$val")
 }
 
 # emit_yaml_fields <file> <harness> <field...> — one emit_kv per harness-table field.
@@ -287,6 +420,7 @@ emit_yaml_fields() {
 emit_toml_kv() {
   local file=$1 key=$2 val=$3
   if [[ -z $val ]]; then return 0; fi
+  val=${val//$SEP/, }
   if [[ $val == *$'\n'* ]]; then
     printf '%s = %s\n' "$key" "$(toml_body "$val")" >>"$file"
   elif [[ $val =~ ^-?[0-9]+(\.[0-9]+)?$ || $val == true || $val == false ]]; then
@@ -296,15 +430,14 @@ emit_toml_kv() {
   fi
 }
 
-# emit_toml_list <file> <key> <comma-joined values>
+# emit_toml_list <file> <key> <SEP- or comma-joined values>
 emit_toml_list() {
-  local file=$1 key=$2 val=$3 el e out=
+  local file=$1 key=$2 val=$3 e out=
   if [[ -z $val ]]; then return 0; fi
-  IFS=',' read -ra el <<<"$val"
-  for e in "${el[@]}"; do
+  while IFS= read -r e; do
     if [[ -n $out ]]; then out+=", "; fi
-    out+=$(tq_ "$(trim "$e")")
-  done
+    out+=$(tq_ "$e")
+  done < <(split_list "$val")
   printf '%s = [%s]\n' "$key" "$out" >>"$file"
 }
 
@@ -329,7 +462,8 @@ copy_skill_assets() {
 
 # --- field lists (every documented frontmatter/TOML field per harness) --------------
 
-CLAUDE_SKILL_FIELDS=(argument-hint arguments when_to_use disable-model-invocation
+# arguments is list-shaped and emitted separately via emit_yaml_list.
+CLAUDE_SKILL_FIELDS=(argument-hint when_to_use disable-model-invocation
   user-invocable allowed-tools disallowed-tools model effort context agent paths shell)
 CLAUDE_AGENT_FIELDS=(tools disallowedTools model permissionMode memory background
   effort isolation color initialPrompt)
@@ -349,6 +483,7 @@ emit_skill() {
   emit_kv "$out" description "$(get "$harness" description)"
   if [[ $harness == claude ]]; then
     emit_yaml_fields "$out" claude "${CLAUDE_SKILL_FIELDS[@]}"
+    emit_yaml_list "$out" arguments "$(get_scoped claude arguments)"
   fi
   emit_raw "$harness" "$out"
   emit_body "$out" "$(body_for "$harness" skill)"
@@ -430,6 +565,7 @@ emit_command_claude() {
   { echo '---'; gen_marker; } >"$out"
   emit_kv "$out" description "$(get claude description)"
   emit_yaml_fields "$out" claude "${CLAUDE_SKILL_FIELDS[@]}"
+  emit_yaml_list "$out" arguments "$(get_scoped claude arguments)"
   emit_raw claude "$out"
   emit_body "$out" "$(body_for claude command)"
   wrote "$out"
