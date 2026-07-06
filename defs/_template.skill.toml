@@ -1,0 +1,69 @@
+# Unified skill definition — build with ./transpile.sh
+# Copy to defs/<name>.skill.toml (files starting with "_" are skipped by the build).
+# Generates <harness>/skills/<name>/SKILL.md for every target — SKILL.md is a shared
+# standard (agentskills.io), so gemini/opencode/codex take only name + description;
+# claude supports the extra fields below.
+# Supporting files: put them in defs/<name>/ — copied into every generated skill dir
+# (convention: scripts/, references/, assets/).
+
+kind = "skill"
+name = "my-skill"           # 1-64 chars, lowercase-hyphen; becomes the directory name
+# Third person, what it does AND when to trigger. This is the activation signal.
+description = "<What this skill does>. Use when <trigger conditions>."
+# targets = ["claude", "gemini", "opencode", "codex"]   # default: all four
+
+# Body syntax: $ARGUMENTS and 1-based $1..$9 (claude output shifted to 0-based
+# automatically). !`cmd` inline shell only runs in claude skills — other harnesses
+# get it rewritten to a bracketed "run this command" instruction.
+# <!-- only: h1, h2 --> ... <!-- /only --> keeps a section for listed harnesses.
+body = '''
+# My Skill
+
+## Purpose
+
+<One paragraph: what this skill accomplishes and the outcome it produces.>
+
+## Instructions
+
+1. <Step-by-step procedure to follow.>
+2. <Reference supporting files by relative path, e.g. scripts/check.sh.>
+3. <Final step / how to report the result.>
+
+## Guidelines
+
+- <Rule or constraint.>
+'''
+
+[claude]
+# argument-hint = "[target]"
+# arguments = ["target", "flag"]      # named args, referenced as $target in the body
+# when_to_use = "extra trigger context appended to the description"
+# disable-model-invocation = true     # user-only; won't auto-trigger
+# user-invocable = false              # claude-only; hidden from the / menu
+# allowed-tools = "Bash(git add *)"   # PRE-APPROVES tools (does not restrict)
+# disallowed-tools = "WebSearch"
+# model = "haiku"                     # override for the rest of the turn
+# effort = "high"                     # low|medium|high|xhigh|max
+# context = "fork"                    # run in a forked subagent
+# agent = "general-purpose"           # subagent type when context = "fork"
+# paths = "src/**"                    # glob(s) limiting auto-activation
+# shell = "bash"                      # bash | powershell for !`cmd` blocks
+# raw = '''
+# hooks:
+#   SessionStart: []
+# '''
+# body = '''claude-specific instructions override'''
+
+[gemini]
+# raw = '''extra frontmatter lines'''
+# body = '''gemini-specific instructions override'''
+
+[opencode]
+# raw = '''extra frontmatter lines'''
+# body = '''opencode-specific instructions override'''
+
+[codex]
+# Codex-specific metadata (icons, brand color, allow_implicit_invocation, MCP tool
+# dependencies) lives in an agents/openai.yaml file — ship it via defs/<name>/agents/.
+# raw = '''extra frontmatter lines'''
+# body = '''codex-specific instructions override'''

@@ -1,0 +1,69 @@
+# Unified command definition — build with ./transpile.sh
+# Copy to defs/<name>.command.toml (files starting with "_" are skipped by the build).
+# Generates: claude/commands/<name>.md      (/<name>)
+#            gemini/commands/<name>.toml    (/<name>)
+#            opencode/commands/<name>.md    (/<name>)
+#            codex/prompts/<name>.md        (/prompts:<name> — deprecated in Codex;
+#                                            set emit = "skill" in [codex] instead)
+
+kind = "command"
+name = "my-command"
+description = "<One line - what this command does>"
+# targets = ["claude", "gemini", "opencode", "codex"]   # default: all four
+
+# Portable body syntax, rewritten per harness:
+# - $ARGUMENTS: everything typed after the command (gemini: {{args}})
+# - $1..$9: positional args, ALWAYS 1-based here (claude output is shifted to its
+#   0-based convention automatically; never write $0 yourself)
+# - !`cmd`: inline shell (gemini: !{cmd}; codex cannot run shell in prompts, so it
+#   becomes a bracketed "run this command" instruction)
+# - <!-- only: h1, h2 --> ... <!-- /only -->: section for listed harnesses only
+body = '''
+<Prompt sent when the user invokes the command.>
+
+All arguments: $ARGUMENTS
+
+Optional dynamic context (remove if unused):
+- Inline shell output: !`git status --short`
+
+## Task
+
+<What the model should do, step by step.>
+'''
+
+[claude]
+# Claude commands share the full skill frontmatter (commands were merged into skills):
+# argument-hint = "[target] [--flag]"
+# arguments = ["target", "flag"]
+# allowed-tools = "Bash(git status *), Bash(git diff *)"
+# disallowed-tools = "WebSearch"
+# model = "haiku"
+# effort = "low"
+# context = "fork"
+# agent = "general-purpose"
+# disable-model-invocation = true
+# user-invocable = false
+# when_to_use = "..."
+# paths = "src/**"
+# shell = "bash"
+# raw = '''extra frontmatter lines'''
+# body = '''claude-specific prompt override'''
+
+[gemini]
+# Gemini command TOML has only description + prompt; use raw for future fields.
+# raw = '''extra toml lines'''
+# body = '''gemini-specific prompt override (write {{args}} directly here)'''
+
+[opencode]
+# agent = "build"        # run under a specific agent
+# model = "anthropic/claude-haiku-4-5"
+# variant = "..."
+# subtask = true         # force a subagent task
+# raw = '''extra frontmatter lines'''
+# body = '''opencode-specific prompt override'''
+
+[codex]
+# emit = "skill"         # ship a Codex skill instead of a deprecated custom prompt
+# argument-hint = "[FILES=<paths>] [TITLE=\"<title>\"]"
+# raw = '''extra frontmatter lines'''
+# body = '''codex-specific prompt override'''

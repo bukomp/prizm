@@ -1,0 +1,102 @@
+# Unified agent definition — build with ./transpile.sh
+# Copy to defs/<name>.agent.toml (files starting with "_" are skipped by the build).
+# Generates: claude/agents/<name>.md, gemini/agents/<name>.md,
+#            opencode/agents/<name>.md, codex/agents/<name>.toml
+# Every documented field of every harness is listed below; uncomment what you need.
+# Fields inside [harness] tables use that harness's REAL field names.
+
+kind = "agent"
+name = "my-agent"
+# Drives delegation in every harness — be specific, include trigger phrases.
+description = "Use this agent when <situation>. Examples - <trigger 1>, <trigger 2>."
+# targets = ["claude", "gemini", "opencode", "codex"]   # default: all four
+
+# Portable fields (a [harness] table value overrides these):
+# temperature = 0.2      # gemini + opencode
+# max_turns = 30         # claude (as maxTurns) + gemini
+# mode = "subagent"      # opencode: primary | subagent | all; default subagent
+
+# Shared system prompt. Body syntax: <!-- only: h1, h2 --> ... <!-- /only --> keeps
+# a section for the listed harnesses only. Don't use !`cmd` here — no harness
+# shell-preprocesses agent prompts.
+body = '''
+You are a <role> specializing in <domain>.
+
+This body becomes the agent's system prompt (developer_instructions in codex),
+so spell out everything the agent needs.
+
+## Process
+
+1. <first step>
+2. <second step>
+
+## Output
+
+Return <exact shape of the result to hand back to the caller>.
+
+## Constraints
+
+- <hard rule>
+'''
+
+[claude]
+# tools = "Read, Grep, Glob"        # comma-string allowlist; omit = inherit all
+# disallowedTools = "WebSearch"     # denylist, applied before tools
+# model = "sonnet"                  # sonnet|opus|haiku|fable|full id|inherit (default inherit)
+# permissionMode = "default"        # default|acceptEdits|dontAsk|bypassPermissions|plan
+# maxTurns = 40
+# skills = ["skill-a", "skill-b"]   # preloaded into the agent's context
+# memory = "project"                # user|project|local
+# background = true
+# effort = "high"                   # low|medium|high|xhigh|max
+# isolation = "worktree"
+# color = "red"                     # red|blue|green|yellow|purple|orange|pink|cyan
+# initialPrompt = "..."             # auto-submitted first turn when run via --agent
+# raw = '''
+# hooks:
+#   PreToolUse: []
+# mcpServers:
+#   - my-server
+# '''
+# body = '''claude-specific system prompt override'''
+
+[gemini]
+# kind = "local"                    # local | remote
+# model = "gemini-2.5-pro"          # omit = inherit
+# tools = ["read_file", "grep"]     # omit = inherit all; wildcards: "*", "mcp_*", "mcp_<server>_*"
+# temperature = 1                   # 0.0-2.0
+# max_turns = 30
+# timeout_mins = 10
+# raw = '''
+# mcpServers:
+#   myServer:
+#     command: npx
+# '''
+
+[opencode]
+# model = "anthropic/claude-sonnet-4-5"   # provider/model-id format
+# variant = "..."
+# temperature = 0.1
+# top_p = 0.9
+# hidden = true                     # hide from @ autocomplete (subagents)
+# disable = false
+# color = "#ff0000"                 # hex or primary|secondary|accent|success|warning|error|info
+# steps = 50                        # max agentic iterations
+# raw = '''
+# permission:
+#   edit: deny
+#   bash:
+#     "git *": allow
+#     "*": ask
+# '''
+
+[codex]
+# model = "gpt-5.2-codex"
+# model_reasoning_effort = "medium"
+# sandbox_mode = "workspace-write"
+# nickname_candidates = ["mya", "agent-m"]
+# raw = '''
+# any_other_config_key = "value"
+# [nested.tables_too]
+# key = "value"
+# '''
