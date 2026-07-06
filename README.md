@@ -11,7 +11,7 @@ One def in, every harness out.
 | opencode | `opencode/agents/*.md` | `opencode/skills/*/SKILL.md` | `opencode/commands/*.md` |
 | Codex CLI | `codex/agents/*.toml` | `codex/skills/*/SKILL.md` | `codex/prompts/*.md` ¹ |
 
-¹ Codex prompts are deprecated — set `emit = "skill"` in the `[codex]` table to ship a skill instead.
+¹ Codex prompts are deprecated; set `emit = "skill"` in the `[codex]` table to ship a skill instead.
 
 Each harness invented its own frontmatter, field names, argument syntax, and directory layout. Writing the same agent four times means it drifts four ways. With prizm you author one `defs/<name>.<kind>.toml` and the build emits every native format, verified against each harness's official docs.
 
@@ -33,7 +33,7 @@ A TOML subset with one shared `body` (the prompt) plus a `[claude]` / `[gemini]`
 - `` !`cmd` `` — inline shell where supported, a bracketed run-this-command instruction where not
 - `<!-- only: claude, gemini --> … <!-- /only -->` — body section for listed harnesses only
 
-Escape hatches: `raw = '''…'''` injects verbatim metadata (nested permission maps, hooks, extra tables), `body = '''…'''` overrides the shared body per harness. Anything unparseable is a hard build error — prizm never emits a mangled value.
+Escape hatches: `raw = '''…'''` injects verbatim metadata (nested permission maps, hooks, extra tables), `body = '''…'''` overrides the shared body per harness. Anything unparseable is a hard build error: prizm never emits a mangled value.
 
 The full language reference lives in the header comment of [`prizm`](prizm); the [`defs/_template.*.toml`](defs/) files enumerate every documented field of every harness.
 
