@@ -1,4 +1,4 @@
-# Harness directories are pure build output of transpile.sh — never committed.
+# Harness directories are pure build output of prizm — never committed.
 /claude/
 /gemini/
 /opencode/

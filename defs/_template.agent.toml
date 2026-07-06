@@ -1,4 +1,4 @@
-# Unified agent definition — build with ./transpile.sh
+# Unified agent definition — build with ./prizm
 # Copy to defs/<name>.agent.toml (files starting with "_" are skipped by the build).
 # The agent's name and kind come from the file name; defs/reviewer.agent.toml
 # generates: claude/agents/reviewer.md, gemini/agents/reviewer.md,

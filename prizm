@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# transpile.sh — build harness-native agents/skills/commands from unified TOML defs.
+# prizm — build harness-native agents/skills/commands from unified TOML defs.
 #
 # Source language: defs/<name>.<kind>.toml — a TOML subset. The artifact's name
 # and kind come from the file name itself; kind = / name = keys override them
@@ -51,7 +51,7 @@ ALL_HARNESSES="claude gemini opencode codex"
 
 usage() {
   cat <<'EOF'
-Usage: ./transpile.sh [def-file ...]
+Usage: ./prizm [def-file ...]
 
 With no arguments, transpiles every defs/*.toml except files starting with "_".
 See the header comment in this script for the def language reference.

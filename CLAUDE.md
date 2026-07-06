@@ -4,18 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Purpose
 
-This repository is a personal collection of reusable agents, skills, slash commands, and related configuration for popular LLM coding harnesses. It contains no application code, build system, or tests — the content is markdown/config definition files organized per harness.
+This repository is **prizm** — reusable agents, skills, and slash commands for popular LLM coding harnesses, authored once as unified TOML defs and transpiled into each harness's native format. There is no application code or test suite; the deliverables are the def files and the pure-bash transpiler `prizm`.
 
 ## Structure
 
 Definitions are authored once in `defs/` and transpiled into every harness's native format:
 
 - `defs/` — unified source definitions (`<name>.<kind>.toml`, kind = skill | agent | command). The artifact's name and kind are derived from the file name; explicit `name =` / `kind =` keys override them. `_`-prefixed files are all-fields-documented templates and are skipped by the build.
-- `transpile.sh` — pure-bash transpiler; `./transpile.sh` builds all defs, `./transpile.sh defs/foo.skill.toml` builds one. Requires bash 4+, no other dependencies.
+- `prizm` — pure-bash transpiler; `./prizm` builds all defs, `./prizm defs/foo.skill.toml` builds one. Requires bash 4+, no other dependencies.
 
 Defs are TOML (a subset: basic/literal strings, numbers, booleans, single-line arrays, `'''` multi-line strings — inline `'''x'''` works, multi-line closing delimiters start their own line — `[section]` headers, and full-line or trailing comments; no inline tables or dotted keys). Multi-line values are dedented by the whitespace prefix common to all non-empty lines, so an indented uncommented template block emits flush-left; unquoted strings or trailing junk after a value are hard build errors — the transpiler never emits a mangled value. Top level holds `kind`, `name`, `description`, `targets`, the shared `body`, and the few genuinely portable fields (`temperature`, `max_turns`, `mode`); each `[claude]`/`[gemini]`/`[opencode]`/`[codex]` table holds that harness's fields under their REAL native names and overrides the top level. Every documented field of every harness is emitted — the `_template.*.toml` files enumerate them all. Model ids and tool names exist only inside harness tables because they are never portable.
 
-Body syntax is canonicalized to `$ARGUMENTS`, 1-based `$1..$9`, and `` !`cmd` ``; the transpiler rewrites these per harness (Gemini: `{{args}}`/`!{cmd}`; Claude positionals shift to its 0-based convention; harnesses without inline shell get a bracketed run-this-command instruction). Escape hatches inside a harness table: `raw = '''...'''` injects verbatim metadata (YAML frontmatter lines for `.md` outputs, TOML for `.toml` outputs — how nested structures like opencode `permission` maps or claude `hooks` are expressed); `body = '''...'''` replaces the shared body for that harness; `<!-- only: h1, h2 --> ... <!-- /only -->` keeps a body section for listed harnesses; `emit = "skill"` in `[codex]` on a command ships a Codex skill instead of a deprecated prompt. Skill supporting files go in `defs/<name>/` and are copied into every generated skill directory. The full language reference lives in the header comment of `transpile.sh`.
+Body syntax is canonicalized to `$ARGUMENTS`, 1-based `$1..$9`, and `` !`cmd` ``; the transpiler rewrites these per harness (Gemini: `{{args}}`/`!{cmd}`; Claude positionals shift to its 0-based convention; harnesses without inline shell get a bracketed run-this-command instruction). Escape hatches inside a harness table: `raw = '''...'''` injects verbatim metadata (YAML frontmatter lines for `.md` outputs, TOML for `.toml` outputs — how nested structures like opencode `permission` maps or claude `hooks` are expressed); `body = '''...'''` replaces the shared body for that harness; `<!-- only: h1, h2 --> ... <!-- /only -->` keeps a body section for listed harnesses; `emit = "skill"` in `[codex]` on a command ships a Codex skill instead of a deprecated prompt. Skill supporting files go in `defs/<name>/` and are copied into every generated skill directory. The full language reference lives in the header comment of `prizm`.
 
 The harness directories are entirely build output — the transpiler creates them as needed and none of them may be edited by hand; edit the def and re-run the build. Context files (CLAUDE.md / GEMINI.md / AGENTS.md for a target project) are out of scope for this repo — they are project-specific, not reusable definitions.
 
@@ -26,7 +26,7 @@ The harness directories are entirely build output — the transpiler creates the
 
 ## Format conventions per harness
 
-New agents, skills, and commands are authored in `defs/` (start from `defs/_template.*.toml`) and generated — not written by hand in the harness directories. The native formats below are what the transpiler emits, verified against each harness's official docs; they matter when reading generated output or extending `transpile.sh`:
+New agents, skills, and commands are authored in `defs/` (start from `defs/_template.*.toml`) and generated — not written by hand in the harness directories. The native formats below are what the transpiler emits, verified against each harness's official docs; they matter when reading generated output or extending `prizm`:
 
 - **Claude Code**: subagents are single `.md` files with YAML frontmatter (`name`, `description` required) as used in `.claude/agents/`. Skills are directories containing a `SKILL.md` plus supporting files, as used in `.claude/skills/`. Slash commands (`.claude/commands/*.md`) have been merged into skills — same frontmatter; skills are the recommended form.
 - **Gemini CLI**: custom commands are `.toml` files (`prompt` required, `description` optional) as used in `.gemini/commands/`; subagents are `.md` files with YAML frontmatter as used in `.gemini/agents/`; skills are `SKILL.md` directories as used in `.gemini/skills/`; context files are `GEMINI.md`.
@@ -35,4 +35,4 @@ New agents, skills, and commands are authored in `defs/` (start from `defs/_temp
 
 Skills use the shared Agent Skills standard (agentskills.io) across all four harnesses: `name` (lowercase-hyphen, must match the directory name) and `description` frontmatter, with supporting files in `scripts/`, `references/`, `assets/`. A skill authored once can be symlinked into every harness; opencode and Codex even read `.claude/skills/` / `.agents/skills/` directly.
 
-Cross-harness porting is the transpiler's job — never copy one harness's frontmatter format into another's folder by hand. To change how a field or body construct maps to a harness, extend the field lists or body pipeline in `transpile.sh`.
+Cross-harness porting is the transpiler's job — never copy one harness's frontmatter format into another's folder by hand. To change how a field or body construct maps to a harness, extend the field lists or body pipeline in `prizm`.

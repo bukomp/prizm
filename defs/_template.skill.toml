@@ -1,4 +1,4 @@
-# Unified skill definition — build with ./transpile.sh
+# Unified skill definition — build with ./prizm
 # Copy to defs/<name>.skill.toml (files starting with "_" are skipped by the build).
 # The skill's name and kind come from the file name (1-64 chars, lowercase-hyphen;
 # name = / kind = keys override it). Generates <harness>/skills/<name>/SKILL.md for
