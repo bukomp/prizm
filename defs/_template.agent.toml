@@ -1,12 +1,12 @@
 # Unified agent definition — build with ./transpile.sh
 # Copy to defs/<name>.agent.toml (files starting with "_" are skipped by the build).
-# Generates: claude/agents/<name>.md, gemini/agents/<name>.md,
-#            opencode/agents/<name>.md, codex/agents/<name>.toml
+# The agent's name and kind come from the file name; defs/reviewer.agent.toml
+# generates: claude/agents/reviewer.md, gemini/agents/reviewer.md,
+#            opencode/agents/reviewer.md, codex/agents/reviewer.toml
+# (name = / kind = keys override the file name if you ever need to.)
 # Every documented field of every harness is listed below; uncomment what you need.
 # Fields inside [harness] tables use that harness's REAL field names.
 
-kind = "agent"
-name = "my-agent"
 # Drives delegation in every harness — be specific, include trigger phrases.
 description = "Use this agent when <situation>. Examples - <trigger 1>, <trigger 2>."
 # targets = ["claude", "gemini", "opencode", "codex"]   # default: all four

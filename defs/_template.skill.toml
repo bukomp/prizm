@@ -1,13 +1,13 @@
 # Unified skill definition — build with ./transpile.sh
 # Copy to defs/<name>.skill.toml (files starting with "_" are skipped by the build).
-# Generates <harness>/skills/<name>/SKILL.md for every target — SKILL.md is a shared
-# standard (agentskills.io), so gemini/opencode/codex take only name + description;
-# claude supports the extra fields below.
+# The skill's name and kind come from the file name (1-64 chars, lowercase-hyphen;
+# name = / kind = keys override it). Generates <harness>/skills/<name>/SKILL.md for
+# every target — SKILL.md is a shared standard (agentskills.io), so
+# gemini/opencode/codex take only name + description; claude supports the extra
+# fields below.
 # Supporting files: put them in defs/<name>/ — copied into every generated skill dir
 # (convention: scripts/, references/, assets/).
 
-kind = "skill"
-name = "my-skill"           # 1-64 chars, lowercase-hyphen; becomes the directory name
 # Third person, what it does AND when to trigger. This is the activation signal.
 description = "<What this skill does>. Use when <trigger conditions>."
 # targets = ["claude", "gemini", "opencode", "codex"]   # default: all four

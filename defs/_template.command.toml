@@ -1,13 +1,13 @@
 # Unified command definition — build with ./transpile.sh
 # Copy to defs/<name>.command.toml (files starting with "_" are skipped by the build).
-# Generates: claude/commands/<name>.md      (/<name>)
+# The command's name and kind come from the file name (name = / kind = keys
+# override it). Generates:
+#            claude/commands/<name>.md      (/<name>)
 #            gemini/commands/<name>.toml    (/<name>)
 #            opencode/commands/<name>.md    (/<name>)
 #            codex/prompts/<name>.md        (/prompts:<name> — deprecated in Codex;
 #                                            set emit = "skill" in [codex] instead)
 
-kind = "command"
-name = "my-command"
 description = "<One line - what this command does>"
 # targets = ["claude", "gemini", "opencode", "codex"]   # default: all four
 
