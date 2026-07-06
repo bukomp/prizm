@@ -1,0 +1,5 @@
+# Harness directories are pure build output of transpile.sh — never committed.
+/claude/
+/gemini/
+/opencode/
+/codex/
