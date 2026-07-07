@@ -1,0 +1,48 @@
+# Fan a task out to sonnet-worker subagents running in parallel.
+# Pairs with defs/sonnet-worker.agent.toml.
+
+description = "Splits a task into independent subtasks and runs them concurrently on sonnet-worker subagents, then integrates the results. Use when a task decomposes into parallel parts - multi-file changes, bulk refactors or edits, writing several independent sections or documents."
+targets = ["claude"]
+
+body = '''
+# Parallelize
+
+Fan the task out to sonnet-worker subagents running concurrently, then integrate
+their results. You do the thinking (decomposition, contracts, integration); the
+workers do the writing.
+
+Task: $ARGUMENTS
+
+## Instructions
+
+1. **Decompose.** Split the task into 2-8 independent subtasks. Each must be
+   completable without another subtask's output, and no two may write to the
+   same file. If two pieces share a file or depend on each other, merge them
+   into one subtask or keep that piece for yourself.
+2. **Fix the contracts first.** Decide anything the subtasks share — interfaces,
+   naming, file layout, tone/style for prose — before spawning, and state it in
+   every brief. Workers cannot see each other.
+3. **Write self-contained briefs.** Each brief must include: the goal, the exact
+   files or scope owned, the shared contracts, relevant context the worker
+   cannot discover cheaply, and what the done state looks like.
+4. **Launch in parallel.** Spawn one Agent per subtask with
+   `subagent_type: "sonnet-worker"`, all in a single message so they run
+   concurrently.
+5. **Integrate.** When all workers report back, review their outputs, resolve
+   seams between subtasks yourself, and handle anything a worker flagged as
+   blocked or assumed.
+6. **Verify and report.** Check the combined result works as a whole (build,
+   tests, or a read-through as appropriate), then summarize for the user: the
+   split, what each worker produced, and any assumptions or follow-ups.
+
+## Guidelines
+
+- Do not parallelize a task that is sequential — just do it directly and say so.
+- Keep integration work (cross-cutting edits, final wiring) for yourself rather
+  than assigning overlapping scopes.
+- If a worker fails or returns an unusable result, fix or redo that subtask
+  yourself instead of respawning blindly.
+'''
+
+[claude]
+argument-hint = "[task to split and run in parallel]"
