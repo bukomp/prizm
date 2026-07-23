@@ -1,0 +1,98 @@
+# Orchestrate a task across a recursive agent workforce.
+# Pairs with defs/opus-manager.agent.toml, defs/sonnet-worker-v2.agent.toml,
+# and defs/haiku-job.agent.toml. The simple one-level fan-out lives in
+# defs/parallelize.skill.toml.
+
+description = "Orchestrates a task across a recursive agent workforce - the orchestrator splits work between opus-manager subagents, managers fan minimal-scope tasks out to sonnet-worker-v2 subagents, and workers can offload trivial chores to haiku-job subagents. Validation cascades back up and ends with the orchestrator running the full test suite, reconciling cross-agent inconsistencies, and reporting. Use when a large task decomposes into many parallel parts - big multi-file changes, bulk refactors or edits, large features, writing several independent sections or documents."
+targets = ["claude"]
+
+body = '''
+# Ultra-parallelize
+
+Orchestrate the task across a recursive agent workforce, then own the final
+quality. You are the orchestrator: you do the thinking — scoping, decomposition,
+contracts, integration, final validation — and the workforce does the execution.
+All execution flows through managers: you never spawn workers or jobs yourself,
+and you never implement subtasks directly.
+
+Task: $ARGUMENTS
+
+## The workforce
+
+| Tier | Agent | Model | Spawned by | Responsibility |
+|------|-------|-------|------------|----------------|
+| Orchestrator | you | your model | the user | split into workstreams, integrate, full-suite validation, final report |
+| Manager | `opus-manager` | Opus | you — one per workstream | split one workstream into minimal tasks, validate workers, scoped tests, update affected docs |
+| Worker | `sonnet-worker-v2` | Sonnet | managers only | execute one precise task; may offload chores to job agents |
+| Job | `haiku-job` | Haiku | workers only | one tiny mechanical chore, always reviewed by its spawner |
+
+This chain is mandatory. Every tier spawns only the tier directly below it —
+you spawn managers, managers spawn workers, workers spawn jobs. Never skip a
+tier, never spawn `sonnet-worker-v2` or `haiku-job` yourself, and never add
+layers.
+
+## Instructions
+
+1. **Scope first.** Restate the goal and write down what is in and out of
+   scope. Everything later — briefs, fixes, the report — stays inside that line.
+2. **Decompose.** Split the task into independent workstreams. No two may write
+   to the same file; if pieces share a file or depend on each other, merge them
+   or keep that piece for yourself.
+3. **One manager per workstream — always.** Spawn an `opus-manager` for every
+   workstream and let it run its own worker pool. There is no direct-to-worker
+   shortcut: even a task with a single workstream gets exactly one manager.
+   Only a task that is genuinely sequential and cannot be split at all is
+   exempt — then do not use the workforce: do it directly and say so.
+4. **Fix the contracts first.** Decide everything the workstreams share —
+   interfaces, naming, file layout, tone/style — before spawning, and state it
+   in every brief. Agents cannot see this conversation or each other.
+5. **Write self-contained briefs.** Each brief carries: the goal; the exact
+   files owned; the shared contracts; context the agent cannot discover
+   cheaply; what done looks like; the sibling workstreams in one line each,
+   with a warning that they run in parallel and their files are off limits;
+   and the report shape to return (done / files / validation / fixes / docs /
+   noticed). Give each manager the command that runs the tests covering its
+   scope — and tell it the full suite is reserved for you.
+6. **Launch in parallel.** Spawn one Agent per workstream with
+   subagent_type: "opus-manager", all in a single message so the managers run
+   concurrently. While they run, do not edit the files you handed out.
+7. **Validate — only after ALL agents have finished.** Never start this early
+   and never delegate it:
+   1. Read the combined diff and hunt for misconceptions that crept in from
+      agents working blind to each other: duplicated helpers, divergent naming
+      or patterns, mismatched interface assumptions, contradictory comments or
+      docs, style drift between workstreams. Fix them until the result reads
+      like one author wrote it.
+   2. Run the project's FULL verification — entire test suite, build,
+      lint/typecheck. Managers only ran scoped tests; the full suite runs
+      exactly once, here. Fix every failure the work introduced and rerun
+      until green. Failures that predate the change get reported, not fixed.
+   3. Review every doc the managers updated. Check it matches what actually
+      shipped, fix or improve anything wrong or thin, and edit for
+      readability — consistent terminology and one voice across workstreams.
+8. **Report.** Lead with the outcome, then:
+   - the split and what each workstream delivered;
+   - validation: what was run and the final state;
+   - inconsistencies found and fixed in step 7;
+   - docs updated by managers and the polish you applied;
+   - **Noticed by agents**: observations bubbled up from managers and workers
+     (pre-existing bugs, risks, adjacent issues) deliberately not acted on;
+   - possible improvements, clearly marked as proposals and strictly about
+     the work delivered — no scope creep.
+
+## Guidelines
+
+- Every tier validates its directs: workers review job output, managers
+  validate workers, you validate everything.
+- The chain is orchestrator → manager → worker → job, every run. If you are
+  about to call subagent_type "sonnet-worker-v2" or "haiku-job", stop — those
+  tiers are not yours to spawn.
+- Never assign overlapping scopes. Cross-cutting edits and final wiring go to
+  a dedicated workstream's manager or wait for your step-7 reconciliation —
+  they are not an excuse to implement during execution.
+- If an agent fails or returns an unusable result, fix or redo that piece
+  yourself instead of respawning blindly.
+'''
+
+[claude]
+argument-hint = "[task to split and run in parallel]"
