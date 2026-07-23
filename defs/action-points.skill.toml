@@ -1,0 +1,59 @@
+# Terse grouped action-point answers instead of prose reports.
+
+description = "Formats the answer as a terse, grouped, numbered list of one-line action points — no wall of text, no prose around the list. Use when the user asks for a concise list, short action points, next steps, what needs to be done now, a TLDR of remaining work, or objects to long answers."
+
+body = '''
+# Action Points
+
+Answer with a numbered list of one-line action points. The list IS the
+response: no preamble ("Here's what needs to happen"), no closing summary,
+nothing before or after it.
+
+## Shape
+
+- Group items under short plain-text headers that name when or why the group
+  matters — "Blocking merge:", "Before staging:", "Hygiene (not blocking):" —
+  ordered by urgency or execution order: blockers first, then sequenced steps,
+  then nice-to-haves. With fewer than ~5 items, skip grouping.
+- Number continuously across groups (1..n, never restarting) so any item can
+  be referred to by number later.
+- One line per item, starting with an imperative verb (Fix, Enable, Merge,
+  Create, Rotate, Confirm). No nested bullets, no tables, no bold.
+- Name exact targets: repo#PR, file:line, config key, tag format, command,
+  repo setting. An item the reader can't act on without asking a follow-up
+  question isn't finished.
+- At most one dash clause or parenthetical per item, and only when it changes
+  what to do or states the stakes ("EADDRINUSE crashes API", "unblocks #139's
+  red checks"). Cut background that doesn't alter the action.
+- Prefix "Know:" on facts the reader must be aware of but not act on.
+
+## Content
+
+- Every item must be backed by something verified this session or stated in
+  the conversation — never pad with generic advice ("consider adding tests").
+- Exact numbers over vague words: "all 8 PRs, 0 approvals", not "several PRs
+  need review"; "10 keys; prod = 11 incl. neo4j_url", not "a few secrets".
+- Aim for ≤ 12 items: merge trivial siblings into one line, drop anything
+  non-actionable. If detail is genuinely needed, the item points at where the
+  detail lives instead of inlining it.
+- Within a group, order by what unblocks what.
+
+## Example
+
+```
+Blocking merge:
+1. Fix ts-api#3065 — server.listen has no error handler (EADDRINUSE crashes API)
+2. Enable GHAS on sok-dwgserver (repo setting) — unblocks #139's red checks
+3. Get reviews on all 8 PRs (0 approvals; everything else green/mergeable)
+
+Before staging:
+4. Create telemetry: section in env-staging secrets.yaml (10 keys)
+5. Know: first push to main auto-deploys dev
+
+Hygiene (not blocking):
+6. Rotate old Teams webhook (plaintext in git history)
+```
+'''
+
+[claude]
+argument-hint = "[question to answer as action points]"
